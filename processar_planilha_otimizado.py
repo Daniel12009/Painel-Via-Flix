@@ -194,6 +194,48 @@ def processar_planilha_otimizado(uploaded_file, tipo_margem, data_inicio_analise
         # custos_df_final.drop_duplicates(subset=colunas_custos_ler, keep='first', inplace=True)
         # st.write(f"(Debug) Linhas DEPOIS da deduplicação final: {len(custos_df_final)}")
 
+        # --- START: Create 'Estoque Full' column based on rules ---
+        # Ensure necessary columns exist before proceeding
+        # Define COL_CONTA_CUSTOS_ORIGINAL if not globally defined (it seems to be)
+        required_cols_for_new_stock = [COL_CONTA_CUSTOS_ORIGINAL, 'Estoque Full VF', 'Estoque Full DK', 'Estoque Full GS']
+        source_cols_present_for_new_stock = all(col in custos_df_final.columns for col in required_cols_for_new_stock)
+
+        if source_cols_present_for_new_stock:
+            try:
+                # Define the conditions
+                cond_vf = custos_df_final[COL_CONTA_CUSTOS_ORIGINAL] == 'Via Flix'
+                cond_dk = custos_df_final[COL_CONTA_CUSTOS_ORIGINAL] == 'Monaco'
+                cond_gs = custos_df_final[COL_CONTA_CUSTOS_ORIGINAL] == 'GS Torneira'
+
+                # Define the choices based on conditions (ensure numeric conversion)
+                choices = [
+                    pd.to_numeric(custos_df_final['Estoque Full VF'], errors='coerce').fillna(0),
+                    pd.to_numeric(custos_df_final['Estoque Full DK'], errors='coerce').fillna(0),
+                    pd.to_numeric(custos_df_final['Estoque Full GS'], errors='coerce').fillna(0)
+                ]
+
+                # Apply np.select to create the new column
+                custos_df_final['Estoque Full'] = np.select(
+                    [cond_vf, cond_dk, cond_gs],
+                    choices,
+                    default=0 # Default value for accounts not matching the rules
+                ).astype(int) # Convert result to integer
+
+                # Remove the original individual stock columns used for the new column
+                cols_to_drop_individual = ['Estoque Full VF', 'Estoque Full DK', 'Estoque Full GS']
+                custos_df_final = custos_df_final.drop(columns=cols_to_drop_individual, errors='ignore') # Use errors='ignore' in case they don't exist
+
+            except Exception as e:
+                 st.warning(f"Erro ao criar coluna 'Estoque Full' personalizada: {e}")
+                 if 'Estoque Full' not in custos_df_final.columns:
+                      custos_df_final['Estoque Full'] = 0 # Default column on error
+        elif 'Estoque Full' not in custos_df_final.columns:
+             # Check which required columns are missing
+             missing_cols_for_new_stock = [col for col in required_cols_for_new_stock if col not in custos_df_final.columns]
+             st.warning(f"Não foi possível criar a coluna 'Estoque Full' personalizada. Colunas necessárias ausentes: {missing_cols_for_new_stock}.")
+             custos_df_final['Estoque Full'] = 0 # Create default column if logic fails
+        # --- END: Create 'Estoque Full' column ---
+
         # --- Adicionar Colunas Placeholder (se necessário) ---
         # Adicionar coluna de Estoque Total Full para Mercado Livre
         colunas_estoque_full = [col for col in custos_df_final.columns if "Estoque Full" in col]
