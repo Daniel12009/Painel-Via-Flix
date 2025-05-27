@@ -1032,6 +1032,50 @@ elif st.session_state.app_state == "dashboard" and st.session_state.df_result is
                 search_term = st.text_input("Pesquisar Produto (SKU ou ID)", key="search_detailed_table", placeholder="Digite o SKU ou ID...")
 
                 df_display = df_tabela_personalizada.copy() # Trabalhar com uma cópia
+
+                # --- START: Add logic for 'Estoque Full' column ---
+                # Ensure necessary columns exist before proceeding
+                # Define COL_CONTA_CUSTOS_ORIGINAL if not globally defined (it seems to be)
+                required_cols = [COL_CONTA_CUSTOS_ORIGINAL, 'Estoque Full VF', 'Estoque Full DK', 'Estoque Full GS']
+                # Check if all required source columns are present
+                source_cols_present = all(col in df_display.columns for col in required_cols)
+
+                if source_cols_present:
+                    try:
+                        # Define the conditions
+                        cond_vf = df_display[COL_CONTA_CUSTOS_ORIGINAL] == 'Via Flix'
+                        cond_dk = df_display[COL_CONTA_CUSTOS_ORIGINAL] == 'Monaco'
+                        cond_gs = df_display[COL_CONTA_CUSTOS_ORIGINAL] == 'GS Torneira'
+
+                        # Define the choices based on conditions
+                        choices = [
+                            pd.to_numeric(df_display['Estoque Full VF'], errors='coerce').fillna(0), # Convert to numeric, handle errors
+                            pd.to_numeric(df_display['Estoque Full DK'], errors='coerce').fillna(0), # Convert to numeric, handle errors
+                            pd.to_numeric(df_display['Estoque Full GS'], errors='coerce').fillna(0)  # Convert to numeric, handle errors
+                        ]
+
+                        # Apply np.select to create the new column
+                        df_display['Estoque Full'] = np.select(
+                            [cond_vf, cond_dk, cond_gs],
+                            choices,
+                            default=0 # Default value for accounts not matching the rules
+                        ).astype(int) # Convert result to integer
+
+                        # Remove the original individual stock columns
+                        cols_to_drop = ['Estoque Full VF', 'Estoque Full DK', 'Estoque Full GS']
+                        df_display = df_display.drop(columns=cols_to_drop)
+                    except Exception as e:
+                         st.error(f"Erro ao criar coluna 'Estoque Full': {e}")
+                         if 'Estoque Full' not in df_display.columns: # Avoid overwriting if partially created
+                              df_display['Estoque Full'] = 0 # Default column on error
+
+                elif 'Estoque Full' not in df_display.columns: # Only warn if 'Estoque Full' doesn't already exist and source cols missing
+                     # Check which required columns are missing
+                     missing_cols = [col for col in required_cols if col not in df_display.columns]
+                     st.warning(f"Não foi possível criar a coluna 'Estoque Full' personalizada. Colunas necessárias ausentes: {missing_cols}. Verifique a função 'personalizar_tabela_por_marketplace' ou a planilha original.")
+                     # Optionally create a default 'Estoque Full' column if needed elsewhere
+                     # df_display['Estoque Full'] = 0
+                # --- END: Add logic for 'Estoque Full' column ---
                 if search_term:
                     search_term_lower = search_term.lower()
                     # Garantir que as colunas existam antes de filtrar
@@ -1084,49 +1128,6 @@ elif st.session_state.app_state == "dashboard" and st.session_state.df_result is
             st.subheader("Alertas e Observações")
             # Exibir alertas em uma aba dedicada
             display_alerts_tab(df_filtrado)
-
-        # --- Exibir Estoque Total Full ---
-        st.markdown("--- ") # Add a separator
-        st.subheader("Estoque Total Consolidado (Filtro Atual)")
-        # Check if the original processed column exists
-        coluna_estoque_a_somar = None
-        # Prioritize the renamed column name if it exists in the filtered data
-        if 'Estoque Full' in df_filtrado.columns:
-            coluna_estoque_a_somar = 'Estoque Full'
-        elif 'Estoque Total Full' in df_filtrado.columns: # Fallback to original name
-            coluna_estoque_a_somar = 'Estoque Total Full'
-
-        if not df_filtrado.empty and coluna_estoque_a_somar:
-            try:
-                # Ensure the column is numeric, coercing errors to NaN and filling with 0
-                estoque_full_numeric = pd.to_numeric(df_filtrado[coluna_estoque_a_somar], errors='coerce').fillna(0)
-
-                # Sum unique combinations of SKU and Estoque to avoid double counting
-                # Assuming SKU defines a unique item for stock purposes
-                sku_col = COL_SKU_CUSTOS if COL_SKU_CUSTOS in df_filtrado.columns else None
-                id_produto_col = COL_ID_PRODUTO_CUSTOS if COL_ID_PRODUTO_CUSTOS in df_filtrado.columns else None
-                unique_identifier_col = sku_col if sku_col else id_produto_col # Use SKU or fallback to ID
-
-                if unique_identifier_col:
-                     # Create a DataFrame with unique identifiers and their corresponding stock
-                     df_unique_stock = df_filtrado[[unique_identifier_col, coluna_estoque_a_somar]].copy()
-                     # Convert stock to numeric *before* dropping duplicates
-                     df_unique_stock[coluna_estoque_a_somar] = pd.to_numeric(df_unique_stock[coluna_estoque_a_somar], errors='coerce').fillna(0)
-                     # Keep the first occurrence of each unique identifier
-                     df_unique_stock = df_unique_stock.drop_duplicates(subset=[unique_identifier_col], keep='first')
-                     # Sum the stock from these unique entries
-                     total_estoque_full = int(df_unique_stock[coluna_estoque_a_somar].sum())
-                else: # If no unique identifier found, sum directly (might overcount)
-                     st.warning("Não foi possível identificar uma coluna única de produto (SKU ou ID). A soma do estoque pode incluir duplicatas.")
-                     total_estoque_full = int(estoque_full_numeric.sum())
-
-                # Display using st.metric for better visualization
-                st.metric(label="Estoque Full Total (Itens Únicos no Filtro)", value=f"{total_estoque_full:,}".replace(",", ".")) # Format with dot as thousands separator
-            except Exception as e:
-                st.warning(f"Erro ao calcular ou exibir o estoque total: {e}")
-                st.metric(label="Estoque Full Total (Itens Únicos no Filtro)", value="Erro")
-        else:
-            st.info("Não há dados de estoque para exibir com os filtros atuais.")
 
 else:
     # Se o estado for inválido ou df_result for None, volta para upload
