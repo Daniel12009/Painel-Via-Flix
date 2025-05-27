@@ -547,26 +547,36 @@ def display_alerts_tab(df):
         if conta_filtro != "Todos":
             df_alertas = df_alertas[df_alertas[COL_CONTA_CUSTOS_ORIGINAL] == conta_filtro]
         
-        # Selecionar colunas relevantes e remover duplicatas
-        colunas_alertas = [
-            COL_SKU_CUSTOS, 
-            COL_ID_PRODUTO_CUSTOS,
-            COL_CONTA_CUSTOS_ORIGINAL, 
-            COL_PLATAFORMA_CUSTOS, 
-            'Margem_Original', 
-            'Estoque Tiny'
-        ]
-        
-        df_alertas_final = df_alertas[colunas_alertas].drop_duplicates()
-        
-        # Renomear colunas para melhor visualização
-        df_alertas_final = df_alertas_final.rename(columns={
-            COL_SKU_CUSTOS: 'SKU',
-            COL_ID_PRODUTO_CUSTOS: 'ID do Produto',
-            COL_CONTA_CUSTOS_ORIGINAL: 'Conta',
-            COL_PLATAFORMA_CUSTOS: 'Marketplace',
-            'Margem_Original': 'Margem'
-        })
+            # Selecionar colunas relevantes e remover duplicatas
+            colunas_alertas = [
+                COL_SKU_CUSTOS, 
+                COL_ID_PRODUTO_CUSTOS,
+                COL_CONTA_CUSTOS_ORIGINAL, 
+                COL_PLATAFORMA_CUSTOS, 
+                'Margem_Original', 
+                'Estoque Tiny',
+                'Estoque Total Full' # Adicionada coluna de estoque total full
+            ]
+            
+            # Garantir que as colunas existem antes de tentar selecionar
+            colunas_existentes_alertas = [col for col in colunas_alertas if col in df_alertas.columns]
+            if not colunas_existentes_alertas:
+                 st.warning("Nenhuma coluna relevante encontrada para os alertas.")
+                 # Retornar um DataFrame vazio ou exibir mensagem
+                 st.dataframe(pd.DataFrame())
+                 return
+
+            df_alertas_final = df_alertas[colunas_existentes_alertas].drop_duplicates()
+            
+            # Renomear colunas para melhor visualização
+            df_alertas_final = df_alertas_final.rename(columns={
+                COL_SKU_CUSTOS: 'SKU',
+                COL_ID_PRODUTO_CUSTOS: 'ID do Produto',
+                COL_CONTA_CUSTOS_ORIGINAL: 'Conta',
+                COL_PLATAFORMA_CUSTOS: 'Marketplace',
+                'Margem_Original': 'Margem',
+                'Estoque Total Full': 'Estoque Total Full ML' # Renomeada
+            })
         
         # Aplicar ordenação
         sort_column_map = {
@@ -996,18 +1006,42 @@ elif st.session_state.app_state == "dashboard" and st.session_state.df_result is
 
                 # Formatar a coluna de valor de venda e estoques
                 format_dict = {}
-                if COL_VALOR_PRODUTO_PLANILHA_CUSTOS in df_tabela_personalizada.columns:
-                    # Usar a função de formatação BRL
-                    format_dict[COL_VALOR_PRODUTO_PLANILHA_CUSTOS] = format_currency_brl 
+                # Usar o nome da coluna RENOMEADA ('Preço') para aplicar a formatação BRL
+                if 'Preço' in df_display.columns: 
+                    format_dict['Preço'] = format_currency_brl 
                 
                 # Formatar colunas de estoque como números inteiros
-                for col in df_tabela_personalizada.columns:
+                for col in df_display.columns:
                     if "Estoque" in col:
                         format_dict[col] = "{:.0f}"  # Sem casas decimais
 
-                # Exibir a tabela com formatação
+                # Adicionar barra de pesquisa
+                search_term = st.text_input("Pesquisar Produto (SKU ou ID)", key="search_detailed_table", placeholder="Digite o SKU ou ID...")
+
+                df_display = df_tabela_personalizada.copy() # Trabalhar com uma cópia
+                if search_term:
+                    search_term_lower = search_term.lower()
+                    # Garantir que as colunas existam antes de filtrar
+                    filter_cols = []
+                    if 'SKU' in df_display.columns:
+                        # Garantir que a coluna SKU seja string antes de aplicar .str
+                        filter_cols.append(df_display['SKU'].astype(str).str.lower().str.contains(search_term_lower, na=False))
+                    if 'ID do Produto' in df_display.columns:
+                         # Garantir que a coluna ID do Produto seja string antes de aplicar .str
+                         filter_cols.append(df_display['ID do Produto'].astype(str).str.lower().str.contains(search_term_lower, na=False))
+                    
+                    if filter_cols:
+                         # Combinar filtros com lógica OR
+                         # Usar reduce para aplicar OR em todas as Series booleanas na lista
+                         from functools import reduce
+                         import operator
+                         combined_filter = reduce(operator.or_, filter_cols)
+                         df_display = df_display[combined_filter]
+                    # Não precisa de warning se colunas não existirem, o filtro simplesmente não será aplicado nessas colunas.
+
+                # Exibir a tabela com formatação (agora usando df_display)
                 st.dataframe(
-                    df_tabela_personalizada.style.apply(highlight_margin, subset=['Margem'])
+                    df_display.style.apply(highlight_margin, subset=['Margem'])
                     .format(format_dict),
                     use_container_width=True
                 )
