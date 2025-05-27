@@ -578,7 +578,7 @@ def display_alerts_tab(df):
                 COL_CONTA_CUSTOS_ORIGINAL: "Conta",
                 COL_PLATAFORMA_CUSTOS: "Marketplace",
                 "Margem_Original": "Margem",
-                "Estoque Total Full": "Estoque Total Full ML" # Renomeada
+                "Estoque Total Full": "Estoque Full" # Renomeada para Estoque Full
             })
         
         # Aplicar ordenação (só se df não for vazio)
@@ -589,7 +589,7 @@ def display_alerts_tab(df):
                 "Conta": "Conta",
                 "Marketplace": "Marketplace",
                 "Estoque": "Estoque Tiny",
-                "Estoque Total Full ML": "Estoque Total Full ML" # Adicionar opção de ordenação
+                "Estoque Full": "Estoque Full" # Adicionar opção de ordenação
             }
             
             # Adicionar a nova opção de ordenação ao selectbox se ainda não estiver lá
@@ -1089,4 +1089,49 @@ else:
     # Se o estado for inválido ou df_result for None, volta para upload
     st.session_state.app_state = "upload"
     st.rerun()
+
+
+        # --- Exibir Estoque Total Full ---
+        st.markdown("--- ") # Add a separator
+        st.subheader("Estoque Total Consolidado (Filtro Atual)")
+        # Check if the original processed column exists
+        coluna_estoque_a_somar = None
+        # Prioritize the renamed column name if it exists in the filtered data
+        if 'Estoque Full' in df_filtrado.columns:
+            coluna_estoque_a_somar = 'Estoque Full'
+        elif 'Estoque Total Full' in df_filtrado.columns: # Fallback to original name
+            coluna_estoque_a_somar = 'Estoque Total Full'
+
+        if not df_filtrado.empty and coluna_estoque_a_somar:
+            try:
+                # Ensure the column is numeric, coercing errors to NaN and filling with 0
+                estoque_full_numeric = pd.to_numeric(df_filtrado[coluna_estoque_a_somar], errors='coerce').fillna(0)
+                
+                # Sum unique combinations of SKU and Estoque to avoid double counting
+                # Assuming SKU defines a unique item for stock purposes
+                sku_col = COL_SKU_CUSTOS if COL_SKU_CUSTOS in df_filtrado.columns else None
+                id_produto_col = COL_ID_PRODUTO_CUSTOS if COL_ID_PRODUTO_CUSTOS in df_filtrado.columns else None
+                unique_identifier_col = sku_col if sku_col else id_produto_col # Use SKU or fallback to ID
+
+                if unique_identifier_col:
+                     # Create a DataFrame with unique identifiers and their corresponding stock
+                     df_unique_stock = df_filtrado[[unique_identifier_col, coluna_estoque_a_somar]].copy()
+                     # Convert stock to numeric *before* dropping duplicates
+                     df_unique_stock[coluna_estoque_a_somar] = pd.to_numeric(df_unique_stock[coluna_estoque_a_somar], errors='coerce').fillna(0)
+                     # Keep the first occurrence of each unique identifier
+                     df_unique_stock = df_unique_stock.drop_duplicates(subset=[unique_identifier_col], keep='first')
+                     # Sum the stock from these unique entries
+                     total_estoque_full = int(df_unique_stock[coluna_estoque_a_somar].sum())
+                else: # If no unique identifier found, sum directly (might overcount)
+                     st.warning("Não foi possível identificar uma coluna única de produto (SKU ou ID). A soma do estoque pode incluir duplicatas.")
+                     total_estoque_full = int(estoque_full_numeric.sum())
+
+                # Display using st.metric for better visualization
+                st.metric(label="Estoque Full Total (Itens Únicos no Filtro)", value=f"{total_estoque_full:,}".replace(",", ".")) # Format with dot as thousands separator
+            except Exception as e:
+                st.warning(f"Erro ao calcular ou exibir o estoque total: {e}")
+                st.metric(label="Estoque Full Total (Itens Únicos no Filtro)", value="Erro")
+        else:
+            st.info("Não há dados de estoque para exibir com os filtros atuais.")
+
 
