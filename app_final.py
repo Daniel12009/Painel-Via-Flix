@@ -1085,12 +1085,6 @@ elif st.session_state.app_state == "dashboard" and st.session_state.df_result is
             # Exibir alertas em uma aba dedicada
             display_alerts_tab(df_filtrado)
 
-else:
-    # Se o estado for inválido ou df_result for None, volta para upload
-    st.session_state.app_state = "upload"
-    st.rerun()
-
-
         # --- Exibir Estoque Total Full ---
         st.markdown("--- ") # Add a separator
         st.subheader("Estoque Total Consolidado (Filtro Atual)")
@@ -1106,7 +1100,7 @@ else:
             try:
                 # Ensure the column is numeric, coercing errors to NaN and filling with 0
                 estoque_full_numeric = pd.to_numeric(df_filtrado[coluna_estoque_a_somar], errors='coerce').fillna(0)
-                
+
                 # Sum unique combinations of SKU and Estoque to avoid double counting
                 # Assuming SKU defines a unique item for stock purposes
                 sku_col = COL_SKU_CUSTOS if COL_SKU_CUSTOS in df_filtrado.columns else None
@@ -1133,5 +1127,10 @@ else:
                 st.metric(label="Estoque Full Total (Itens Únicos no Filtro)", value="Erro")
         else:
             st.info("Não há dados de estoque para exibir com os filtros atuais.")
+
+else:
+    # Se o estado for inválido ou df_result for None, volta para upload
+    st.session_state.app_state = "upload"
+    st.rerun()
 
 
