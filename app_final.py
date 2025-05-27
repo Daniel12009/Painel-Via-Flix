@@ -578,7 +578,7 @@ def display_alerts_tab(df):
                 COL_CONTA_CUSTOS_ORIGINAL: "Conta",
                 COL_PLATAFORMA_CUSTOS: "Marketplace",
                 "Margem_Original": "Margem",
-                "Estoque Total Full": "Estoque Full" # Renomeada para Estoque Full
+                "Estoque Total Full": "Estoque Total Full ML" # Renomeada
             })
         
         # Aplicar ordenação (só se df não for vazio)
@@ -589,7 +589,7 @@ def display_alerts_tab(df):
                 "Conta": "Conta",
                 "Marketplace": "Marketplace",
                 "Estoque": "Estoque Tiny",
-                "Estoque Full": "Estoque Full" # Adicionar opção de ordenação
+                "Estoque Total Full ML": "Estoque Total Full ML" # Adicionar opção de ordenação
             }
             
             # Adicionar a nova opção de ordenação ao selectbox se ainda não estiver lá
@@ -1032,50 +1032,6 @@ elif st.session_state.app_state == "dashboard" and st.session_state.df_result is
                 search_term = st.text_input("Pesquisar Produto (SKU ou ID)", key="search_detailed_table", placeholder="Digite o SKU ou ID...")
 
                 df_display = df_tabela_personalizada.copy() # Trabalhar com uma cópia
-
-                # --- START: Add logic for 'Estoque Full' column ---
-                # Ensure necessary columns exist before proceeding
-                # Define COL_CONTA_CUSTOS_ORIGINAL if not globally defined (it seems to be)
-                required_cols = [COL_CONTA_CUSTOS_ORIGINAL, 'Estoque Full VF', 'Estoque Full DK', 'Estoque Full GS']
-                # Check if all required source columns are present
-                source_cols_present = all(col in df_display.columns for col in required_cols)
-
-                if source_cols_present:
-                    try:
-                        # Define the conditions
-                        cond_vf = df_display[COL_CONTA_CUSTOS_ORIGINAL] == 'Via Flix'
-                        cond_dk = df_display[COL_CONTA_CUSTOS_ORIGINAL] == 'Monaco'
-                        cond_gs = df_display[COL_CONTA_CUSTOS_ORIGINAL] == 'GS Torneira'
-
-                        # Define the choices based on conditions
-                        choices = [
-                            pd.to_numeric(df_display['Estoque Full VF'], errors='coerce').fillna(0), # Convert to numeric, handle errors
-                            pd.to_numeric(df_display['Estoque Full DK'], errors='coerce').fillna(0), # Convert to numeric, handle errors
-                            pd.to_numeric(df_display['Estoque Full GS'], errors='coerce').fillna(0)  # Convert to numeric, handle errors
-                        ]
-
-                        # Apply np.select to create the new column
-                        df_display['Estoque Full'] = np.select(
-                            [cond_vf, cond_dk, cond_gs],
-                            choices,
-                            default=0 # Default value for accounts not matching the rules
-                        ).astype(int) # Convert result to integer
-
-                        # Remove the original individual stock columns
-                        cols_to_drop = ['Estoque Full VF', 'Estoque Full DK', 'Estoque Full GS']
-                        df_display = df_display.drop(columns=cols_to_drop)
-                    except Exception as e:
-                         st.error(f"Erro ao criar coluna 'Estoque Full': {e}")
-                         if 'Estoque Full' not in df_display.columns: # Avoid overwriting if partially created
-                              df_display['Estoque Full'] = 0 # Default column on error
-
-                elif 'Estoque Full' not in df_display.columns: # Only warn if 'Estoque Full' doesn't already exist and source cols missing
-                     # Check which required columns are missing
-                     missing_cols = [col for col in required_cols if col not in df_display.columns]
-                     st.warning(f"Não foi possível criar a coluna 'Estoque Full' personalizada. Colunas necessárias ausentes: {missing_cols}. Verifique a função 'personalizar_tabela_por_marketplace' ou a planilha original.")
-                     # Optionally create a default 'Estoque Full' column if needed elsewhere
-                     # df_display['Estoque Full'] = 0
-                # --- END: Add logic for 'Estoque Full' column ---
                 if search_term:
                     search_term_lower = search_term.lower()
                     # Garantir que as colunas existam antes de filtrar
@@ -1133,5 +1089,4 @@ else:
     # Se o estado for inválido ou df_result for None, volta para upload
     st.session_state.app_state = "upload"
     st.rerun()
-
 
