@@ -584,22 +584,43 @@ def display_alerts_tab(df):
             "SKU": "SKU",
             "Conta": "Conta",
             "Marketplace": "Marketplace",
-            "Estoque": "Estoque Tiny"
+            "Estoque": "Estoque Tiny",
+            "Estoque Total Full ML": "Estoque Total Full ML" # Adicionar opção de ordenação
         }
         
-        sort_column = sort_column_map[st.session_state.alert_sort_by]
-        ascending = st.session_state.alert_sort_order == "Crescente"
+        # Adicionar a nova opção de ordenação ao selectbox se ainda não estiver lá
+        sort_options = list(sort_column_map.keys())
+        if "Estoque Total Full ML" not in st.session_state.alert_sort_by and "Estoque Total Full ML" in df_alertas_final.columns:
+             # Atualizar o selectbox na próxima execução se necessário, por agora apenas mapear
+             pass # A lógica do selectbox está na definição da UI, não aqui.
         
-        # Ordenar o DataFrame
-        if sort_column == "Margem":
-            # Para ordenar por margem, precisamos extrair o valor numérico
-            df_alertas_final['Margem_Num_Sort'] = df_alertas_final['Margem'].apply(
-                lambda x: float(str(x).replace('%', '').replace(',', '.'))
-            )
-            df_alertas_final = df_alertas_final.sort_values('Margem_Num_Sort', ascending=ascending)
-            df_alertas_final = df_alertas_final.drop('Margem_Num_Sort', axis=1)
-        else:
-            df_alertas_final = df_alertas_final.sort_values(sort_column, ascending=ascending)
+        # Verificar se a coluna selecionada para ordenar existe
+        if st.session_state.alert_sort_by in sort_column_map and sort_column_map[st.session_state.alert_sort_by] in df_alertas_final.columns:
+            sort_column = sort_column_map[st.session_state.alert_sort_by]
+            ascending = st.session_state.alert_sort_order == "Crescente"
+            
+            # Ordenar o DataFrame APENAS se não estiver vazio
+            if not df_alertas_final.empty:
+                if sort_column == "Margem":
+                    # Para ordenar por margem, precisamos extrair o valor numérico
+                    try:
+                        df_alertas_final["Margem_Num_Sort"] = df_alertas_final["Margem"].apply(
+                            lambda x: float(str(x).replace("%", "").replace(",", ".").strip())
+                        )
+                        df_alertas_final = df_alertas_final.sort_values("Margem_Num_Sort", ascending=ascending)
+                        df_alertas_final = df_alertas_final.drop("Margem_Num_Sort", axis=1)
+                    except Exception as e:
+                        st.warning(f"Erro ao ordenar por margem: {e}") # Informar erro mas continuar
+                        # Tentar ordenação padrão por string se a numérica falhar
+                        df_alertas_final = df_alertas_final.sort_values(sort_column, ascending=ascending)
+                else:
+                    # Ordenar por outras colunas (incluindo as de estoque)
+                    df_alertas_final = df_alertas_final.sort_values(sort_column, ascending=ascending)
+        elif not df_alertas_final.empty:
+             st.warning(f"Coluna selecionada para ordenação ('{st.session_state.alert_sort_by}') não encontrada ou inválida. Usando ordenação padrão.")
+             # Pode adicionar uma ordenação padrão aqui, ex: por SKU
+             if 'SKU' in df_alertas_final.columns:
+                 df_alertas_final = df_alertas_final.sort_values('SKU', ascending=True)
         
         # Exibir a tabela de alertas
         if df_alertas_final.empty:
@@ -1004,17 +1025,6 @@ elif st.session_state.app_state == "dashboard" and st.session_state.df_result is
                             colors.append('')
                     return colors
 
-                # Formatar a coluna de valor de venda e estoques
-                format_dict = {}
-                # Usar o nome da coluna RENOMEADA ('Preço') para aplicar a formatação BRL
-                if 'Preço' in df_display.columns: 
-                    format_dict['Preço'] = format_currency_brl 
-                
-                # Formatar colunas de estoque como números inteiros
-                for col in df_display.columns:
-                    if "Estoque" in col:
-                        format_dict[col] = "{:.0f}"  # Sem casas decimais
-
                 # Adicionar barra de pesquisa
                 search_term = st.text_input("Pesquisar Produto (SKU ou ID)", key="search_detailed_table", placeholder="Digite o SKU ou ID...")
 
@@ -1032,12 +1042,22 @@ elif st.session_state.app_state == "dashboard" and st.session_state.df_result is
                     
                     if filter_cols:
                          # Combinar filtros com lógica OR
-                         # Usar reduce para aplicar OR em todas as Series booleanas na lista
                          from functools import reduce
                          import operator
                          combined_filter = reduce(operator.or_, filter_cols)
                          df_display = df_display[combined_filter]
                     # Não precisa de warning se colunas não existirem, o filtro simplesmente não será aplicado nessas colunas.
+
+                # Formatar a coluna de valor de venda e estoques APÓS filtrar
+                format_dict = {}
+                # Usar o nome da coluna RENOMEADA ('Preço') para aplicar a formatação BRL
+                if 'Preço' in df_display.columns: 
+                    format_dict['Preço'] = format_currency_brl 
+                
+                # Formatar colunas de estoque como números inteiros
+                for col in df_display.columns:
+                    if "Estoque" in col:
+                        format_dict[col] = "{:.0f}"  # Sem casas decimais
 
                 # Exibir a tabela com formatação (agora usando df_display)
                 st.dataframe(
