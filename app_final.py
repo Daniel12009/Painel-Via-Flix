@@ -533,11 +533,11 @@ def display_alerts_tab(df):
         
         # Aplicar filtro por tipo de alerta
         if tipo_alerta == "Margens Críticas":
-            df_alertas = df_alertas[df_alertas['Margem_Critica'] == True]
+            df_alertas = df_alertas[df_alertas["Margem_Critica"] == True]
         elif tipo_alerta == "Estoque Parado":
-            df_alertas = df_alertas[df_alertas['Estoque_Parado'] == True]
+            df_alertas = df_alertas[df_alertas["Estoque_Parado"] == True]
         elif tipo_alerta == "Alta Performance":
-            df_alertas = df_alertas[df_alertas['Margem_Num'] > 20]
+            df_alertas = df_alertas[df_alertas["Margem_Num"] > 20]
         
         # Aplicar filtro por marketplace
         if marketplace_filtro != "Todos":
@@ -547,60 +547,63 @@ def display_alerts_tab(df):
         if conta_filtro != "Todos":
             df_alertas = df_alertas[df_alertas[COL_CONTA_CUSTOS_ORIGINAL] == conta_filtro]
         
-            # Selecionar colunas relevantes e remover duplicatas
-            colunas_alertas = [
-                COL_SKU_CUSTOS, 
-                COL_ID_PRODUTO_CUSTOS,
-                COL_CONTA_CUSTOS_ORIGINAL, 
-                COL_PLATAFORMA_CUSTOS, 
-                'Margem_Original', 
-                'Estoque Tiny',
-                'Estoque Total Full' # Adicionada coluna de estoque total full
-            ]
+        # Definir colunas ANTES de criar df_alertas_final
+        colunas_alertas = [
+            COL_SKU_CUSTOS, 
+            COL_ID_PRODUTO_CUSTOS,
+            COL_CONTA_CUSTOS_ORIGINAL, 
+            COL_PLATAFORMA_CUSTOS, 
+            "Margem_Original", 
+            "Estoque Tiny",
+            "Estoque Total Full" # Adicionada coluna de estoque total full
+        ]
+        
+        # Garantir que as colunas existem antes de tentar selecionar
+        colunas_existentes_alertas = [col for col in colunas_alertas if col in df_alertas.columns]
+        
+        # Criar df_alertas_final AQUI, APÓS TODOS os filtros
+        if not colunas_existentes_alertas:
+             st.warning("Nenhuma coluna relevante encontrada para os alertas.")
+             df_alertas_final = pd.DataFrame() # Define como vazio se não houver colunas
+        elif df_alertas.empty:
+             df_alertas_final = pd.DataFrame(columns=colunas_existentes_alertas) # Define com colunas mas vazio
+        else:
+             df_alertas_final = df_alertas[colunas_existentes_alertas].drop_duplicates()
             
-            # Garantir que as colunas existem antes de tentar selecionar
-            colunas_existentes_alertas = [col for col in colunas_alertas if col in df_alertas.columns]
-            if not colunas_existentes_alertas:
-                 st.warning("Nenhuma coluna relevante encontrada para os alertas.")
-                 # Retornar um DataFrame vazio ou exibir mensagem
-                 st.dataframe(pd.DataFrame())
-                 return
-
-            df_alertas_final = df_alertas[colunas_existentes_alertas].drop_duplicates()
-            
-            # Renomear colunas para melhor visualização
+        # Renomear colunas para melhor visualização (só se df não for vazio)
+        if not df_alertas_final.empty:
             df_alertas_final = df_alertas_final.rename(columns={
-                COL_SKU_CUSTOS: 'SKU',
-                COL_ID_PRODUTO_CUSTOS: 'ID do Produto',
-                COL_CONTA_CUSTOS_ORIGINAL: 'Conta',
-                COL_PLATAFORMA_CUSTOS: 'Marketplace',
-                'Margem_Original': 'Margem',
-                'Estoque Total Full': 'Estoque Total Full ML' # Renomeada
+                COL_SKU_CUSTOS: "SKU",
+                COL_ID_PRODUTO_CUSTOS: "ID do Produto",
+                COL_CONTA_CUSTOS_ORIGINAL: "Conta",
+                COL_PLATAFORMA_CUSTOS: "Marketplace",
+                "Margem_Original": "Margem",
+                "Estoque Total Full": "Estoque Total Full ML" # Renomeada
             })
         
-        # Aplicar ordenação
-        sort_column_map = {
-            "Margem": "Margem",
-            "SKU": "SKU",
-            "Conta": "Conta",
-            "Marketplace": "Marketplace",
-            "Estoque": "Estoque Tiny",
-            "Estoque Total Full ML": "Estoque Total Full ML" # Adicionar opção de ordenação
-        }
-        
-        # Adicionar a nova opção de ordenação ao selectbox se ainda não estiver lá
-        sort_options = list(sort_column_map.keys())
-        if "Estoque Total Full ML" not in st.session_state.alert_sort_by and "Estoque Total Full ML" in df_alertas_final.columns:
-             # Atualizar o selectbox na próxima execução se necessário, por agora apenas mapear
-             pass # A lógica do selectbox está na definição da UI, não aqui.
-        
-        # Verificar se a coluna selecionada para ordenar existe
-        if st.session_state.alert_sort_by in sort_column_map and sort_column_map[st.session_state.alert_sort_by] in df_alertas_final.columns:
-            sort_column = sort_column_map[st.session_state.alert_sort_by]
-            ascending = st.session_state.alert_sort_order == "Crescente"
+        # Aplicar ordenação (só se df não for vazio)
+        if not df_alertas_final.empty:
+            sort_column_map = {
+                "Margem": "Margem",
+                "SKU": "SKU",
+                "Conta": "Conta",
+                "Marketplace": "Marketplace",
+                "Estoque": "Estoque Tiny",
+                "Estoque Total Full ML": "Estoque Total Full ML" # Adicionar opção de ordenação
+            }
             
-            # Ordenar o DataFrame APENAS se não estiver vazio
-            if not df_alertas_final.empty:
+            # Adicionar a nova opção de ordenação ao selectbox se ainda não estiver lá
+            # A lógica do selectbox em si está na UI (col1), aqui apenas garantimos que a ordenação funcione
+            sort_options = list(sort_column_map.keys())
+            # A verificação abaixo não é mais necessária aqui pois df_alertas_final já está definido
+            # if "Estoque Total Full ML" not in st.session_state.alert_sort_by and "Estoque Total Full ML" in df_alertas_final.columns:
+            #     pass 
+            
+            # Verificar se a coluna selecionada para ordenar existe
+            if st.session_state.alert_sort_by in sort_column_map and sort_column_map[st.session_state.alert_sort_by] in df_alertas_final.columns:
+                sort_column = sort_column_map[st.session_state.alert_sort_by]
+                ascending = st.session_state.alert_sort_order == "Crescente"
+                
                 if sort_column == "Margem":
                     # Para ordenar por margem, precisamos extrair o valor numérico
                     try:
@@ -616,11 +619,11 @@ def display_alerts_tab(df):
                 else:
                     # Ordenar por outras colunas (incluindo as de estoque)
                     df_alertas_final = df_alertas_final.sort_values(sort_column, ascending=ascending)
-        elif not df_alertas_final.empty:
-             st.warning(f"Coluna selecionada para ordenação ('{st.session_state.alert_sort_by}') não encontrada ou inválida. Usando ordenação padrão.")
-             # Pode adicionar uma ordenação padrão aqui, ex: por SKU
-             if 'SKU' in df_alertas_final.columns:
-                 df_alertas_final = df_alertas_final.sort_values('SKU', ascending=True)
+            else:
+                 st.warning(f"Coluna selecionada para ordenação ('{st.session_state.alert_sort_by}') não encontrada ou inválida. Usando ordenação padrão.")
+                 # Pode adicionar uma ordenação padrão aqui, ex: por SKU
+                 if 'SKU' in df_alertas_final.columns:
+                     df_alertas_final = df_alertas_final.sort_values('SKU', ascending=True)
         
         # Exibir a tabela de alertas
         if df_alertas_final.empty:
