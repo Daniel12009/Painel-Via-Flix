@@ -3,5 +3,8 @@ pandas
 matplotlib
 numpy
 plotly
-
+os
+io
 openpyxl
+traceback
+json
