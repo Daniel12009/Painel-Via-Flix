@@ -1,0 +1,8 @@
+cd Users\User\Documents\Software VIAFLIX\BASEE
+
+pip install streamlit pandas matplotlib numpy geopandas requests
+
+streamlit run app.py
+
+
+
